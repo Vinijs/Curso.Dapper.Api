@@ -9,7 +9,10 @@ public class Aluno
     public bool Ativo { get; set; }
     public DateTime DataCriacao { get; set; }
 
-    public string Curso { get; set; }
-    public string Turma { get; set; }
-    public string Turno { get; set; }
+    public ICollection<Curso> Cursos { get; set; }
+
+    public Aluno()
+    {
+        Cursos = new List<Curso>();
+    }
 }

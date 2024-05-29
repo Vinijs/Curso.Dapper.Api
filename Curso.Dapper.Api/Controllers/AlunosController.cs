@@ -22,12 +22,93 @@ public class AlunosController : ControllerBase
         return Ok(alunos);
     }
 
+    [HttpGet("com-cursos", Name = "BuscarAlunosComCursos")]
+    public async Task<IActionResult> GetAlunosComCursos()
+    {
+        using var connection = new SqlConnection(_connectionString);
+        var sql = @"SELECT *
+                    FROM Alunos a
+                    INNER JOIN AlunosCursos ac ON ac.IdAluno = a.Id
+                    INNER JOIN Cursos c ON c.Id = ac.IdCurso";
+
+        var alunosDicionario = new Dictionary<int, Aluno>();
+
+        _ = await connection.QueryAsync<Aluno, AlunosCursos,Entidades.Curso, Aluno>(sql,
+            (aluno, alunoCurso, curso ) =>
+            {
+                if (!alunosDicionario.TryGetValue(aluno.Id, out var alunoEntrada))
+                {
+                    alunoEntrada = aluno;
+                    alunosDicionario.Add(alunoEntrada.Id, alunoEntrada);
+                }
+
+                if(alunoEntrada.Id == alunoCurso.IdAluno && alunoCurso.IdCurso == curso.Id)
+                    alunoEntrada.Cursos.Add(curso);
+
+
+                return aluno;
+            });
+        return Ok(alunosDicionario.Values);
+    }
+
     [HttpGet("{id}", Name = "BuscarAlunoPorId")]
     public async Task<IActionResult> Get(int id)
     {
         using var connection = new SqlConnection(_connectionString);
         var aluno = await connection.
             QueryFirstOrDefaultAsync<Aluno>("SELECT * FROM Alunos WHERE Id = @id", new { id });
+        if (aluno is null)
+            return NotFound();
+
+        return Ok(aluno);
+    }
+
+    [HttpGet("com-cursos/{id}", Name = "BuscarAlunoComCursosPorId")]
+    public async Task<IActionResult> GetAlunoComCursos(int id)
+    {
+        using var connection = new SqlConnection(_connectionString);
+        var sql = @"SELECT *
+                    FROM Alunos a
+                    INNER JOIN AlunosCursos ac ON ac.IdAluno = a.Id
+                    INNER JOIN Cursos c ON c.Id = ac.IdCurso
+                    WHERE a.Id = @id";
+
+        Aluno alunoRetorno = null!; 
+
+        _ = await connection.
+            QueryAsync<Aluno, Entidades.Curso, Aluno>(sql,
+            (aluno, curso) => 
+            {
+                alunoRetorno ??= new Aluno();
+
+                aluno.Cursos.Add(curso);
+                return aluno;
+            }, new { id });
+        if (alunoRetorno is null)
+            return NotFound();
+
+        return Ok(alunoRetorno);
+    }
+
+    [HttpGet("dynanic/{id}", Name = "BuscarAlunoPorIdUsandoDynamic")]
+    public async Task<IActionResult> GetWithDynamic(int id)
+    {
+        using var connection = new SqlConnection(_connectionString);
+        var dadoDinamico = await connection.
+            QueryFirstOrDefaultAsync("SELECT * FROM Alunos WHERE Id = @id", new { id });
+
+        var dataCadastro = dadoDinamico.DataCadastro;
+
+        var aluno = new Aluno
+        {
+            Id = dadoDinamico.Id,
+            Nome = dadoDinamico.Nome,
+            Email = dadoDinamico.Email,
+            DataNascimento = dadoDinamico.DataNascimento,
+            Ativo = dadoDinamico.Ativo,
+            DataCriacao = dadoDinamico.DataCriacao
+        };
+        
         if (aluno is null)
             return NotFound();
 
@@ -44,8 +125,8 @@ public class AlunosController : ControllerBase
             return BadRequest(new { mensagem = "Aluno já cadastrado" });
         }
 
-        var sql = @"INSERT INTO Alunos (Nome, Email, DataNascimento,Ativo, DataCriacao, Curso, Turma, Turno)
-                       VALUES (@Nome, @Email, @DataNascimento,1, GETDATE(), @Curso, @Turma, @Turno);
+        var sql = @"INSERT INTO Alunos (Nome, Email, DataNascimento,Ativo, DataCriacao)
+                       VALUES (@Nome, @Email, @DataNascimento,1, GETDATE());
                        SELECT CAST(SCOPE_IDENTITY() as int)";
         var id = await connection.ExecuteScalarAsync<int>(sql, aluno);
         aluno.Id = id;
@@ -56,11 +137,11 @@ public class AlunosController : ControllerBase
     public async Task<IActionResult> Put(int id,[FromBody] Aluno aluno)
     {
         using var connection = new SqlConnection(_connectionString);
-        var sql = @"UPDATE Alunos SET Nome = @Nome, Email = @Email, DataNascimento = @DataNascimento,
-                   Curso = @Curso, Turma = @Turma, Turno = @Turno WHERE Id = @id";
+        var sql = @"UPDATE Alunos SET Nome = @Nome, Email = @Email, DataNascimento = @DataNascimento
+         WHERE Id = @id";
         var linhasAfetadas = await connection
-            .ExecuteAsync(sql, new { id, aluno.Nome, aluno.Email, aluno.DataNascimento,
-                                     aluno.Curso, aluno.Turma, aluno.Turno});
+            .ExecuteAsync(sql, new { id, aluno.Nome, aluno.Email, aluno.DataNascimento
+                                     });
         if (linhasAfetadas == 0)
         {
             return NotFound();
