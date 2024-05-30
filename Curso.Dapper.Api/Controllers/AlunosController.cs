@@ -22,6 +22,19 @@ public class AlunosController : ControllerBase
         return Ok(alunos);
     }
 
+    [HttpGet("obter-por-ids",Name = "BuscarAlunosPorIds")]
+    public async Task<IActionResult> ObterAlunosPorIds(string ids)
+    {
+        using var connection = new SqlConnection(_connectionString);
+
+        var idsSeparados = ids.Split(",", StringSplitOptions.RemoveEmptyEntries);
+
+
+        var alunos = await connection
+            .QueryAsync<Aluno>("SELECT * FROM Alunos WHERE Id IN @idsSeparados", new { idsSeparados });
+        return Ok(alunos);
+    }
+
     [HttpGet("com-cursos", Name = "BuscarAlunosComCursos")]
     public async Task<IActionResult> GetAlunosComCursos()
     {

@@ -1,4 +1,5 @@
-﻿using Curso.Dapper.Api.Entidades;
+﻿using Curso.Dapper.Api.Data.Database.Dtos;
+using Curso.Dapper.Api.Entidades;
 using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using System.Data.SqlClient;
@@ -92,5 +93,21 @@ public class TurmasController: ControllerBase
         }
 
         return Ok(turmas);
+    }
+
+    [HttpGet("informacoes-turma", Name = "InformacoesTurma")]
+    public async Task<IActionResult> GetInformacoesTurma()
+    {
+        using var connection = new SqlConnection(_connectionString);
+        var sql = @"SELECT
+                    t.Nome,
+                    t.NomeCurso,
+                    tu.Nome AS NomeTurno
+                    FROM Turmas (NOLOCK) t
+                    INNER JOIN Turnos (NOLOCK) tu ON tu.Id = t.IdTurno";
+
+        var informacoesTurma = await connection.QueryAsync<InformacoesTurmaDto>(sql);
+
+        return Ok(informacoesTurma);
     }
 }
