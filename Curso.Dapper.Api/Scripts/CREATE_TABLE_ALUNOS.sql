@@ -225,3 +225,43 @@ BEGIN
 	SELECT @@ROWCOUNT;
 END
 GO
+
+--PROC USANDO TABELA TIPO COM PARAMETRO
+CREATE TYPE [dbo].[NomesTurnosType] AS TABLE
+(
+	[NomeTurno] VARCHAR(14) NOT NULL,
+	[IdTurno] INT NOT NULL
+)
+
+CREATE PROCEDURE [dbo].[BuscarTurnosPorNomeEIds]
+	@TabelaTurnos [dbo].[NomesTurnosType] READONLY
+AS 
+BEGIN
+	SELECT
+	*
+	FROM Turnos (NOLOCK)
+	WHERE Id in (SELECT IdTurno FROM @TabelaTurnos)
+	
+	UNION
+
+	SELECT
+	*
+	FROM Turnos (NOLOCK)
+	WHERE Nome in (SELECT NomeTurno FROM @TabelaTurnos)
+END;
+
+DECLARE @TabelaTurnos AS [dbo].[NomesTurnosType];
+
+INSERT INTO @TabelaTurnos VALUES('Tarde', 0), ('', 1)
+
+EXEC [dbo].[BuscarTurnosPorNomeEIds] @TabelaTurnos
+
+-- Tabela FilaEnvioEmail
+CREATE TABLE FilaEnvioEmail
+(
+	Id INT NOT NULL IDENTITY(1,1),
+	CorpoEmail VARCHAR(4000) NOT NULL,
+	Enviado BIT NOT NULL,
+	De VARCHAR(200) NOT NULL,
+	Para VARCHAR(200) NOT NULL
+)

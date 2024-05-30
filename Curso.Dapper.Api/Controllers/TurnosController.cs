@@ -1,4 +1,5 @@
 ﻿using Curso.Dapper.Api.Entidades;
+using Curso.Dapper.Api.Extensions;
 using Dapper;
 using Microsoft.AspNetCore.Mvc;
 using System.Data;
@@ -35,6 +36,26 @@ public class TurnosController : ControllerBase
         var turno = await connection.QueryFirstOrDefaultAsync<Turno>(nomeProc,
             new { id }, commandType: CommandType.StoredProcedure);
         return Ok(turno);
+    }
+
+    [HttpGet("obter-por-ids-e-nomes", Name = "ObterPorIdsENomes")]
+    public async Task<IActionResult> ObterPorIdsENomes(string ids, string nomes)
+    {
+        using var connection = new SqlConnection(_connectionString);
+        var nomeProc = "[dbo].[BuscarTurnosPorNomeEIds]";
+        var parametroNomes = nomes.Split(',');
+        var parametroIds = ids.Split(',');
+        var dicionario = new Dictionary<int, string>();
+
+        for (int i = 0; i <parametroIds.Length; i++)
+        {
+            dicionario.Add(int.Parse(parametroIds[i]), parametroNomes[i]);
+        }
+
+        var turnos = await connection.QueryAsync<Turno>(nomeProc, new { TabelaTurnos = dicionario.GetTableValuedParameter()}
+        , commandType: CommandType.StoredProcedure);
+
+        return Ok(turnos);
     }
 
     [HttpPost(Name = "InserirTurnoProcedure")]

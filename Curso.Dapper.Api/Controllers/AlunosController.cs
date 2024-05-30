@@ -128,23 +128,59 @@ public class AlunosController : ControllerBase
         return Ok(aluno);
     }
 
-    [HttpPost(Name = "CadastrarAluno")]
-    public async Task<IActionResult> Post([FromBody] Aluno aluno)
+    [HttpPost("cadastrar-com-email-proprio",Name = "CadastrarAlunoComEmailProprio")]
+    public async Task<IActionResult> PostComEmail([FromBody] Aluno aluno)
     {
         using var connection = new SqlConnection(_connectionString);
+        int id = 0;
 
-        if (await AlunoExiste(aluno.Email, connection))
+        connection.Open();
+
+        using var transaction = connection.BeginTransaction();
+
+        try
         {
-            return BadRequest(new { mensagem = "Aluno já cadastrado" });
-        }
+            if (await AlunoExiste(aluno.Email, connection, transaction))
+            {
+                return BadRequest(new { mensagem = "Aluno já cadastrado" });
+            }
 
-        var sql = @"INSERT INTO Alunos (Nome, Email, DataNascimento,Ativo, DataCriacao)
+            var sql = @"INSERT INTO Alunos (Nome, Email, DataNascimento,Ativo, DataCriacao)
                        VALUES (@Nome, @Email, @DataNascimento,1, GETDATE());
                        SELECT CAST(SCOPE_IDENTITY() as int)";
-        var id = await connection.ExecuteScalarAsync<int>(sql, aluno);
-        aluno.Id = id;
+
+            id = await connection.ExecuteScalarAsync<int>(sql, aluno, transaction: transaction);
+            aluno.Id = id;
+
+            throw new Exception("Erro ao cadastrar aluno");
+
+            var filaEmail = new FilaEnvioEmail
+            {
+                CorpoEmail = $"<h1>Seja bem-vindo {aluno.Nome}</h1>",
+                De = "direcao@email.com",
+                Para = aluno.Email,
+                Enviado = false,
+            };
+
+            sql = @"INSERT INTO FilaEnvioEmail (De, Para, CorpoEmail, Enviado)
+                VALUES (@De, @Para, @CorpoEmail, @Enviado);
+                SELECT CAST(SCOPE_IDENTITY() as int)";
+
+            var idFila = await connection.ExecuteScalarAsync<int>(sql, filaEmail, transaction: transaction);
+            filaEmail.Id = idFila;
+
+            await transaction.CommitAsync();
+        }
+        catch (Exception)
+        {
+            await transaction.RollbackAsync();
+            return BadRequest(new { mensagem = "Erro ao cadastrar aluno" });
+        }
+
         return CreatedAtRoute("BuscarAlunoPorId", new { id }, aluno);
     }
+
+
 
     [HttpPut("{id}", Name = "AtualizarAluno")]
     public async Task<IActionResult> Put(int id,[FromBody] Aluno aluno)
@@ -176,10 +212,10 @@ public class AlunosController : ControllerBase
         return NoContent();
     }
 
-    private static async Task<bool> AlunoExiste(string email, IDbConnection connection)
+    private static async Task<bool> AlunoExiste(string email, IDbConnection connection, IDbTransaction transaction = null!)
     {
         return await connection
             .QueryFirstOrDefaultAsync<bool>("SELECT 1 FROM Alunos WHERE Email = @email",
-                                          new { email });
+                                          new { email }, transaction: transaction);
     }
 }
